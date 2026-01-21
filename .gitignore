@@ -56,3 +56,11 @@ htmlcov/
 # Windows reserved names
 nul
 NUL
+
+# Deployment-specific files (Windows Server)
+TrafoBackend.exe
+TrafoBackend.xml
+run_init.bat
+nginx-service.xml
+*.wrapper.log
+*.out.log

@@ -9,6 +9,8 @@ function App() {
   const [error, setError] = useState(null)
   const [stats, setStats] = useState(null)
   const [searchParams, setSearchParams] = useState(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState(null)
 
   useEffect(() => {
     fetchStats()
@@ -23,6 +25,42 @@ function App() {
       }
     } catch (error) {
       console.error('Stats fetch error:', error)
+    }
+  }
+
+  const handleRefreshDatabase = async () => {
+    setIsRefreshing(true)
+    setRefreshMessage(null)
+
+    try {
+      const response = await fetch('/api/database/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Veritabani yenileme hatasi')
+      }
+
+      setRefreshMessage({
+        type: 'success',
+        text: data.message
+      })
+
+      // Stats'i guncelle
+      await fetchStats()
+
+    } catch (error) {
+      setRefreshMessage({
+        type: 'error',
+        text: error.message
+      })
+    } finally {
+      setIsRefreshing(false)
+      // 5 saniye sonra mesaji kaldir
+      setTimeout(() => setRefreshMessage(null), 5000)
     }
   }
 
@@ -66,6 +104,19 @@ function App() {
             <h1>Trafo Matcher</h1>
           </div>
           <div className="status">
+            <button
+              className={`refresh-button ${isRefreshing ? 'refreshing' : ''}`}
+              onClick={handleRefreshDatabase}
+              disabled={isRefreshing}
+              title="Dizayn veritabanini yenile - yeni eklenen dosyalari tarar"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={isRefreshing ? 'spin' : ''}>
+                <path d="M23 4v6h-6"/>
+                <path d="M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              {isRefreshing ? 'Yenileniyor...' : 'Veritabanini Yenile'}
+            </button>
             {stats && (
               <span className="status-badge connected">
                 {stats.total_designs} Dizayn
@@ -73,6 +124,11 @@ function App() {
             )}
           </div>
         </div>
+        {refreshMessage && (
+          <div className={`refresh-message ${refreshMessage.type}`}>
+            {refreshMessage.text}
+          </div>
+        )}
       </header>
 
       <main className="main-content">

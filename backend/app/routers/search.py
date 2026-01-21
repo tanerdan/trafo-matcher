@@ -244,3 +244,71 @@ async def health_check(
             "models": ollama_models
         }
     }
+
+
+@router.post("/database/refresh")
+async def refresh_database(
+    db_service: DatabaseService = Depends(get_db_service)
+):
+    """
+    Veritabanini Excel dosyalarindan yeniden yukle.
+    Bu islem dizayn dizinindeki tum Excel dosyalarini tarar ve veritabanini gunceller.
+    """
+    from ..services.excel_parser import ExcelParser
+
+    designs_dir = os.getenv("DESIGNS_DIRECTORY", "Z:\\")
+
+    if not os.path.exists(designs_dir):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dizayn dizini bulunamadi: {designs_dir}"
+        )
+
+    try:
+        parser = ExcelParser(designs_dir)
+        valid_files = parser.find_valid_design_files()
+
+        if not valid_files:
+            raise HTTPException(
+                status_code=404,
+                detail="Gecerli dizayn dosyasi bulunamadi."
+            )
+
+        success_count = 0
+        error_count = 0
+        errors = []
+
+        for file_path in valid_files:
+            try:
+                specs = parser.parse_excel_file(file_path)
+                if specs and specs.input_rating_kva:
+                    db_service.upsert_design(specs)
+                    success_count += 1
+                else:
+                    errors.append(f"{file_path.name}: Rating bulunamadi")
+                    error_count += 1
+            except Exception as e:
+                errors.append(f"{file_path.name}: {str(e)}")
+                error_count += 1
+
+        stats = db_service.get_stats()
+
+        return {
+            "success": True,
+            "message": f"Veritabani guncellendi: {success_count} basarili, {error_count} hatali",
+            "details": {
+                "total_files": len(valid_files),
+                "success_count": success_count,
+                "error_count": error_count,
+                "errors": errors[:10] if errors else []
+            },
+            "stats": stats
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Veritabani yenileme hatasi: {str(e)}"
+        )
